@@ -1,150 +1,349 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aswang AI Studio | Video Creator</title>
-    <!-- FFmpeg.wasm Library -->
-    <script src="https://unpkg.com"></script>
-    <style>
-        :root { --blood-red: #8b0000; --dark-bg: #0a0a0a; --text-gray: #ccc; }
-        body { background: var(--dark-bg); color: var(--text-gray); font-family: 'Segoe UI', Arial, sans-serif; margin: 0; display: flex; justify-content: center; }
-        .app-container { width: 100%; max-width: 800px; padding: 40px 20px; text-align: center; }
-        h1 { color: var(--blood-red); text-transform: uppercase; letter-spacing: 4px; margin-bottom: 10px; }
-        p { font-size: 0.9em; margin-bottom: 30px; color: #666; }
-        textarea { 
-            width: 100%; height: 120px; background: #151515; color: #ff4d4d; border: 1px solid #333; 
-            padding: 15px; border-radius: 8px; font-size: 16px; resize: none; box-sizing: border-box;
-        }
-        .controls { margin-top: 20px; }
-        .btn { 
-            background: var(--blood-red); color: white; border: none; padding: 15px 40px; 
-            font-weight: bold; border-radius: 5px; cursor: pointer; transition: 0.3s; width: 100%;
-        }
-        .btn:hover { background: #ff0000; box-shadow: 0 0 15px var(--blood-red); }
-        .btn:disabled { background: #333; cursor: not-allowed; }
-        .status-container { margin-top: 30px; display: none; }
-        .progress-bar { width: 100%; height: 12px; background: #222; border-radius: 6px; overflow: hidden; margin: 15px 0; }
-        #progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--blood-red), #ff0000); transition: 0.4s; }
-        #status-text { font-style: italic; font-size: 0.85em; }
-        #preview-section { margin-top: 40px; display: none; border-top: 1px solid #222; padding-top: 30px; }
-        video { width: 100%; border-radius: 8px; border: 2px solid #222; margin-bottom: 20px; }
-        .download-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    </style>
-</head>
-<body>
-
-<div class="app-container">
-    <h1>🌑 Aswang AI Studio</h1>
-    <p>AI-powered horror video creator para sa YouTube at TikTok.</p>
-    <textarea id="prompt-input" placeholder="Isulat ang iyong kwento o prompt dito..."></textarea>
-    <div class="controls">
-        <button id="start-btn" class="btn" onclick="startEngine()">BUUIN ANG VIDEO</button>
-    </div>
-    <div class="status-container" id="status-box">
-        <div id="status-text">Inihahanda ang AI engine...</div>
-        <div class="progress-bar"><div id="progress-fill"></div></div>
-        <div id="percentage">0%</div>
-    </div>
-    <div id="preview-section">
-        <h3>Preview ng iyong Gawa</h3>
-        <video id="final-video" controls></video>
-        <div class="download-group">
-            <button class="btn" onclick="downloadFile()">DOWNLOAD MP4</button>
-            <button class="btn" style="background:#222;" onclick="generateThumbnail()">SAVE THUMBNAIL</button>
-        </div>
-    </div>
-</div>
-
-<canvas id="thumb-canvas" style="display:none;"></canvas>
-
-<script>
-    // 1. Initialize FFmpeg instance sa labas para global
-    const { createFFmpeg, fetchFile } = FFmpeg;
-    const ffmpeg = createFFmpeg({ 
-        log: true,
-        corePath: 'https://unpkg.com'
-    });
-
-    let generatedImageUrl = ""; 
-
-    async function startEngine() {
-        const prompt = document.getElementById('prompt-input').value;
-        if (!prompt) return alert("Maglagay muna ng prompt!");
-
-        const startBtn = document.getElementById('start-btn');
-        const statusBox = document.getElementById('status-box');
-        startBtn.disabled = true;
-        statusBox.style.display = 'block';
-
-        try {
-            // 2. Hintayin mag-load bago gamitin
-            if (!ffmpeg.isLoaded()) {
-                updateStatus("🚀 Loading FFmpeg Engine...", 10);
-                await ffmpeg.load();
-            }
-
-            updateStatus("🎨 Generating AI Scenes...", 30);
-            const encodedPrompt = encodeURIComponent(prompt + ", cinematic horror style, dark atmosphere");
-            generatedImageUrl = `https://pollinations.ai{encodedPrompt}?width=1280&height=720&seed=${Math.random()}`;
-            
-            const imgData = await fetch(generatedImageUrl).then(r => r.arrayBuffer());
-            ffmpeg.FS('writeFile', 'input.jpg', new Uint8Array(imgData));
-
-            updateStatus("🎬 Rendering Video (Ken Burns Effect)...", 60);
-            await ffmpeg.run(
-                '-loop', '1', '-i', 'input.jpg',
-                '-vf', "zoompan=z='min(zoom+0.0015,1.5)':d=300:s=1280x720:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)', vignette=PI/4",
-                '-t', '10', 
-                '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-                'output.mp4'
-            );
-
-            const data = ffmpeg.FS('readFile', 'output.mp4');
-            const videoUrl = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
-            
-            document.getElementById('final-video').src = videoUrl;
-            document.getElementById('preview-section').style.display = 'block';
-            updateStatus("✅ Tapos na!", 100);
-            startBtn.disabled = false;
-
-        } catch (err) {
-            console.error(err);
-            alert("Nagkaroon ng error. Siguraduhing tama ang vercel.json mo.");
-            startBtn.disabled = false;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aswang AI Studio | Video Creator</title>
+  <style>
+    :root {
+      --blood-red: #8b0000;
+      --dark-bg: #0a0a0a;
+      --text-gray: #ccc;
     }
 
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--dark-bg);
+      color: var(--text-gray);
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 800px;
+      padding: 40px 20px;
+      text-align: center;
+    }
+
+    h1 {
+      color: var(--blood-red);
+      text-transform: uppercase;
+      letter-spacing: 4px;
+      margin-bottom: 10px;
+      font-size: 2rem;
+    }
+
+    p {
+      font-size: 0.95em;
+      margin-bottom: 30px;
+      color: #666;
+    }
+
+    textarea {
+      width: 100%;
+      height: 120px;
+      background: #151515;
+      color: #ff4d4d;
+      border: 1px solid #333;
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 16px;
+      resize: none;
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: #555;
+    }
+
+    .controls {
+      margin-top: 20px;
+    }
+
+    .btn {
+      background: var(--blood-red);
+      color: white;
+      border: none;
+      padding: 15px 24px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.25s;
+      width: 100%;
+      margin-top: 10px;
+      font-size: 15px;
+    }
+
+    .btn:hover {
+      background: #b00000;
+      box-shadow: 0 0 15px rgba(139, 0, 0, 0.35);
+    }
+
+    .btn:disabled {
+      background: #333;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .status-container {
+      margin-top: 30px;
+      display: none;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 12px;
+      background: #222;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 15px 0;
+    }
+
+    #progress-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--blood-red), #ff0000);
+      transition: 0.35s ease;
+    }
+
+    #status-text {
+      font-style: italic;
+      font-size: 0.9em;
+    }
+
+    #percentage {
+      margin-top: 8px;
+      font-size: 0.9em;
+      color: #999;
+    }
+
+    #preview-section {
+      margin-top: 40px;
+      display: none;
+      border-top: 1px solid #222;
+      padding-top: 30px;
+    }
+
+    video {
+      width: 100%;
+      border-radius: 8px;
+      border: 2px solid #222;
+      margin-bottom: 20px;
+      background: #000;
+    }
+
+    .download-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 520px) {
+      .download-group {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 1.6rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <h1>🌑 Aswang AI Studio</h1>
+    <p>AI-powered horror video creator para sa YouTube at TikTok.</p>
+
+    <textarea id="prompt-input" placeholder="Isulat ang iyong kwento o prompt dito..."></textarea>
+
+    <div class="controls">
+      <button id="start-btn" class="btn">BUUIN ANG VIDEO</button>
+    </div>
+
+    <div class="status-container" id="status-box">
+      <div id="status-text">Inihahanda ang AI engine...</div>
+      <div class="progress-bar">
+        <div id="progress-fill"></div>
+      </div>
+      <div id="percentage">0%</div>
+    </div>
+
+    <div id="preview-section">
+      <h3>Preview ng iyong Gawa</h3>
+      <video id="final-video" controls></video>
+      <div class="download-group">
+        <button class="btn" id="download-btn">DOWNLOAD MP4</button>
+        <button class="btn" style="background:#222;" id="thumb-btn">SAVE THUMBNAIL</button>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="thumb-canvas" style="display:none;"></canvas>
+
+  <script type="module">
+    import { FFmpeg } from "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js";
+    import { fetchFile, toBlobURL } from "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js";
+
+    const ffmpeg = new FFmpeg();
+
+    let generatedImageUrl = "";
+    let ffmpegLoaded = false;
+    let videoObjectUrl = "";
+
+    const promptInput = document.getElementById("prompt-input");
+    const startBtn = document.getElementById("start-btn");
+    const statusBox = document.getElementById("status-box");
+    const statusText = document.getElementById("status-text");
+    const progressFill = document.getElementById("progress-fill");
+    const percentage = document.getElementById("percentage");
+    const previewSection = document.getElementById("preview-section");
+    const finalVideo = document.getElementById("final-video");
+    const downloadBtn = document.getElementById("download-btn");
+    const thumbBtn = document.getElementById("thumb-btn");
+
     function updateStatus(text, percent) {
-        document.getElementById('status-text').innerText = text;
-        document.getElementById('progress-fill').style.width = percent + "%";
-        document.getElementById('percentage').innerText = percent + "%";
+      statusText.innerText = text;
+      progressFill.style.width = percent + "%";
+      percentage.innerText = percent + "%";
+    }
+
+    async function loadFFmpeg() {
+      if (ffmpegLoaded) return;
+
+      updateStatus("🚀 Loading FFmpeg engine...", 10);
+
+      const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+      });
+
+      ffmpegLoaded = true;
+    }
+
+    async function startEngine() {
+      const prompt = promptInput.value.trim();
+      if (!prompt) {
+        alert("Maglagay muna ng prompt!");
+        return;
+      }
+
+      startBtn.disabled = true;
+      statusBox.style.display = "block";
+      previewSection.style.display = "none";
+      updateStatus("📡 Preparing tools...", 5);
+
+      try {
+        await loadFFmpeg();
+
+        updateStatus("🎨 Generating AI image...", 30);
+
+        const encodedPrompt = encodeURIComponent(
+          `${prompt}, cinematic horror style, dark atmosphere, high contrast, dramatic lighting`
+        );
+        const seed = Math.floor(Math.random() * 1000000000);
+
+        generatedImageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1280&height=720&seed=${seed}&nologo=true`;
+
+        const imageData = await fetchFile(generatedImageUrl);
+        await ffmpeg.writeFile("input.jpg", imageData);
+
+        updateStatus("🎬 Rendering video...", 65);
+
+        await ffmpeg.exec([
+          "-loop", "1",
+          "-i", "input.jpg",
+          "-vf", "zoompan=z='min(zoom+0.0015,1.5)':d=300:s=1280x720:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)',vignette=PI/4",
+          "-t", "10",
+          "-c:v", "libx264",
+          "-pix_fmt", "yuv420p",
+          "output.mp4"
+        ]);
+
+        const data = await ffmpeg.readFile("output.mp4");
+        const videoBlob = new Blob([data.buffer], { type: "video/mp4" });
+
+        if (videoObjectUrl) {
+          URL.revokeObjectURL(videoObjectUrl);
+        }
+
+        videoObjectUrl = URL.createObjectURL(videoBlob);
+        finalVideo.src = videoObjectUrl;
+        previewSection.style.display = "block";
+
+        updateStatus("✅ Tapos na!", 100);
+      } catch (err) {
+        console.error(err);
+        alert("Nagkaroon ng error. Tingnan ang console para sa details.");
+        updateStatus("❌ May error", 0);
+      } finally {
+        startBtn.disabled = false;
+      }
     }
 
     function downloadFile() {
-        const link = document.createElement('a');
-        link.href = document.getElementById('final-video').src;
-        link.download = "aswang_video.mp4";
-        link.click();
+      if (!finalVideo.src) {
+        alert("Walang video na pwedeng i-download.");
+        return;
+      }
+
+      const link = document.createElement("a");
+      link.href = finalVideo.src;
+      link.download = "aswang_video.mp4";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
     }
 
-    async function generateThumbnail() {
-        const canvas = document.getElementById('thumb-canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = 1280; canvas.height = 720;
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.src = generatedImageUrl;
-        img.onload = () => {
-            ctx.drawImage(img, 0, 0, 1280, 720);
-            ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0,0,1280,720);
-            ctx.fillStyle = "red"; ctx.font = "bold 80px Arial"; ctx.textAlign = "center";
-            ctx.fillText("ASWANG FILES", 640, 360);
-            const link = document.createElement('a');
-            link.href = canvas.toDataURL("image/jpeg");
-            link.download = "thumbnail.jpg"; link.click();
-        };
+    function generateThumbnail() {
+      if (!generatedImageUrl) {
+        alert("Wala pang generated image.");
+        return;
+      }
+
+      const canvas = document.getElementById("thumb-canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = 1280;
+      canvas.height = 720;
+
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = generatedImageUrl;
+
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, 1280, 720);
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(0, 0, 1280, 720);
+
+        ctx.fillStyle = "red";
+        ctx.font = "bold 80px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("ASWANG FILES", 640, 360);
+
+        const link = document.createElement("a");
+        link.href = canvas.toDataURL("image/jpeg");
+        link.download = "thumbnail.jpg";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      };
+
+      img.onerror = () => {
+        alert("Hindi ma-load ang thumbnail image.");
+      };
     }
-</script>
+
+    startBtn.addEventListener("click", startEngine);
+    downloadBtn.addEventListener("click", downloadFile);
+    thumbBtn.addEventListener("click", generateThumbnail);
+  </script>
 </body>
 </html>
