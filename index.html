@@ -59,10 +59,6 @@
       outline: none;
     }
 
-    textarea:focus {
-      border-color: #555;
-    }
-
     .controls {
       margin-top: 20px;
     }
@@ -196,6 +192,7 @@
     let generatedImageUrl = "";
     let ffmpegLoaded = false;
     let videoObjectUrl = "";
+    let imageObjectUrl = "";
 
     const promptInput = document.getElementById("prompt-input");
     const startBtn = document.getElementById("start-btn");
@@ -221,12 +218,24 @@
 
       const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
 
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-      });
+      try {
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+        });
+        ffmpegLoaded = true;
+      } catch (err) {
+        console.error("FFmpeg load error:", err);
+        throw new Error("Hindi ma-load ang FFmpeg engine. Baka blocked ang CDN o mabagal ang network.");
+      }
+    }
 
-      ffmpegLoaded = true;
+    async function getImageBlob(url) {
+      const res = await fetch(url, { mode: "cors" });
+      if (!res.ok) {
+        throw new Error(`Image request failed: ${res.status} ${res.statusText}`);
+      }
+      return await res.blob();
     }
 
     async function startEngine() {
@@ -253,7 +262,12 @@
 
         generatedImageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1280&height=720&seed=${seed}&nologo=true`;
 
-        const imageData = await fetchFile(generatedImageUrl);
+        const imgBlob = await getImageBlob(generatedImageUrl);
+
+        if (imageObjectUrl) URL.revokeObjectURL(imageObjectUrl);
+        imageObjectUrl = URL.createObjectURL(imgBlob);
+
+        const imageData = await fetchFile(imageObjectUrl);
         await ffmpeg.writeFile("input.jpg", imageData);
 
         updateStatus("🎬 Rendering video...", 65);
@@ -271,18 +285,16 @@
         const data = await ffmpeg.readFile("output.mp4");
         const videoBlob = new Blob([data.buffer], { type: "video/mp4" });
 
-        if (videoObjectUrl) {
-          URL.revokeObjectURL(videoObjectUrl);
-        }
-
+        if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
         videoObjectUrl = URL.createObjectURL(videoBlob);
+
         finalVideo.src = videoObjectUrl;
         previewSection.style.display = "block";
 
         updateStatus("✅ Tapos na!", 100);
       } catch (err) {
-        console.error(err);
-        alert("Nagkaroon ng error. Tingnan ang console para sa details.");
+        console.error("Build error:", err);
+        alert(`Nagkaroon ng error:\n${err?.message || err}`);
         updateStatus("❌ May error", 0);
       } finally {
         startBtn.disabled = false;
