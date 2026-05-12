@@ -134,6 +134,8 @@
       white-space: pre-wrap;
       word-break: break-word;
       min-height: 50px;
+      max-height: 150px;
+      overflow-y: auto;
     }
 
     #preview-section {
@@ -161,6 +163,17 @@
       background: #222;
     }
 
+    .error-message {
+      background: #4b0000;
+      border: 1px solid var(--blood-red);
+      color: #ff9999;
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 10px;
+      font-size: 0.9em;
+      display: none;
+    }
+
     @media (max-width: 520px) {
       .download-group {
         grid-template-columns: 1fr;
@@ -182,6 +195,8 @@
     <div class="controls">
       <button id="start-btn" class="btn">BUUIN ANG VIDEO</button>
     </div>
+
+    <div class="error-message" id="error-box"></div>
 
     <div class="status-container" id="status-box">
       <div id="status-text">Inihahanda ang AI engine...</div>
@@ -222,6 +237,7 @@
     const progressFill = document.getElementById("progress-fill");
     const percentage = document.getElementById("percentage");
     const debugBox = document.getElementById("debug-box");
+    const errorBox = document.getElementById("error-box");
     const previewSection = document.getElementById("preview-section");
     const finalVideo = document.getElementById("final-video");
     const downloadBtn = document.getElementById("download-btn");
@@ -229,17 +245,28 @@
 
     function logDebug(msg) {
       debugBox.textContent = `${debugBox.textContent}\n${msg}`.trim();
+      debugBox.scrollTop = debugBox.scrollHeight;
     }
 
     function resetDebug() {
       debugBox.textContent = "Ready.";
     }
 
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.style.display = "block";
+      console.error(msg);
+    }
+
+    function hideError() {
+      errorBox.style.display = "none";
+    }
+
     function updateStatus(text, percent) {
       statusText.innerText = text;
       progressFill.style.width = percent + "%";
       percentage.innerText = percent + "%";
-      logDebug(`[STATUS ${percent}%] ${text}`);
+      logDebug(`[${percent}%] ${text}`);
     }
 
     function setError(step, err) {
@@ -249,7 +276,7 @@
       debugBox.textContent = `STEP: ${step}\nERROR: ${message}`;
       percentage.innerText = "0%";
       progressFill.style.width = "0%";
-      alert(`Nagkaroon ng error sa step na: ${step}\n\n${message}`);
+      showError(`Error sa step: ${step}\n${message}`);
     }
 
     async function loadFFmpeg() {
@@ -259,22 +286,76 @@
 
       const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
 
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-      });
+      try {
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+        });
 
-      ffmpegLoaded = true;
-      logDebug("FFmpeg loaded successfully.");
+        ffmpegLoaded = true;
+        logDebug("FFmpeg loaded successfully.");
+      } catch (err) {
+        throw new Error(`FFmpeg loading failed: ${err.message}`);
+      }
     }
 
     async function fetchImageAsBlob(url) {
-      logDebug(`Fetching image:\n${url}`);
-      const res = await fetch(url, { mode: "cors" });
-      if (!res.ok) {
-        throw new Error(`Image request failed: ${res.status} ${res.statusText}`);
+      logDebug(`Fetching image from: ${url.substring(0, 60)}...`);
+      
+      try {
+        const res = await fetch(url, { 
+          mode: "cors",
+          headers: {
+            "Accept": "image/*"
+          }
+        });
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        
+        const blob = await res.blob();
+        if (!blob.type.startsWith("image/")) {
+          throw new Error(`Invalid response type: ${blob.type}`);
+        }
+        
+        return blob;
+      } catch (err) {
+        logDebug(`Image fetch failed: ${err.message}`);
+        throw err;
       }
-      return await res.blob();
+    }
+
+    async function generateAIImage(prompt) {
+      updateStatus("Generating AI image...", 25);
+
+      const enhancedPrompt = `${prompt}, cinematic horror style, dark atmosphere, high contrast, dramatic lighting`;
+      const encodedPrompt = encodeURIComponent(enhancedPrompt);
+      const seed = Math.floor(Math.random() * 1000000000);
+
+      // Try primary service first
+      let imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1280&height=720&seed=${seed}&nologo=true`;
+      
+      try {
+        logDebug("Attempting Pollinations API...");
+        const imgBlob = await fetchImageAsBlob(imageUrl);
+        logDebug("Image generated successfully");
+        return imageUrl;
+      } catch (err1) {
+        logDebug("Pollinations failed, trying fallback...");
+        
+        // Fallback to simpler image generation
+        try {
+          imageUrl = `https://picsum.photos/1280/720?random=${seed}`;
+          logDebug("Attempting Picsum fallback...");
+          await fetchImageAsBlob(imageUrl);
+          logDebug("Fallback image loaded");
+          return imageUrl;
+        } catch (err2) {
+          logDebug("All image services failed");
+          throw new Error("Cannot generate AI image - all services unavailable");
+        }
+      }
     }
 
     async function startEngine() {
@@ -284,6 +365,7 @@
         return;
       }
 
+      hideError();
       startBtn.disabled = true;
       statusBox.style.display = "block";
       previewSection.style.display = "none";
@@ -293,16 +375,7 @@
       try {
         await loadFFmpeg();
 
-        updateStatus("Generating AI image...", 25);
-
-        const encodedPrompt = encodeURIComponent(
-          `${prompt}, cinematic horror style, dark atmosphere, high contrast, dramatic lighting`
-        );
-        const seed = Math.floor(Math.random() * 1000000000);
-
-        generatedImageUrl =
-          `https://image.pollinations.ai/prompt/${encodedPrompt}` +
-          `?width=1280&height=720&seed=${seed}&nologo=true`;
+        generatedImageUrl = await generateAIImage(prompt);
 
         const imgBlob = await fetchImageAsBlob(generatedImageUrl);
 
@@ -314,14 +387,16 @@
 
         updateStatus("Rendering video...", 60);
 
-        // Mas light para sa mobile browser
+        // Optimized for mobile browsers
         await ffmpeg.exec([
           "-loop", "1",
           "-i", "input.jpg",
-          "-vf", "scale=854:480,zoompan=z='min(zoom+0.0012,1.25)':d=180:s=854x480,format=yuv420p",
+          "-vf", "scale=854:480,zoompan=z='min(zoom+0.001,1.2)':d=180:s=854x480,format=yuv420p",
           "-t", "6",
-          "-r", "30",
+          "-r", "24",
           "-c:v", "libx264",
+          "-preset", "veryfast",
+          "-crf", "28",
           "-pix_fmt", "yuv420p",
           "output.mp4"
         ]);
@@ -339,11 +414,7 @@
 
         updateStatus("Done!", 100);
       } catch (err) {
-        if (String(err).includes("Forbidden") || String(err).includes("403")) {
-          setError("Forbidden / 403 detected", err);
-        } else {
-          setError("Build failed", err);
-        }
+        setError("Build failed", err);
       } finally {
         startBtn.disabled = false;
       }
