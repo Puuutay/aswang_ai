@@ -284,9 +284,11 @@
 
       updateStatus("Loading FFmpeg engine...", 10);
 
-      const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+      // Updated to use esm dist for better CORS support with GitHub Pages
+      const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
 
       try {
+        logDebug("Fetching FFmpeg core from CDN...");
         await ffmpeg.load({
           coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
           wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
@@ -295,6 +297,7 @@
         ffmpegLoaded = true;
         logDebug("FFmpeg loaded successfully.");
       } catch (err) {
+        logDebug(`FFmpeg load error: ${err.message}`);
         throw new Error(`FFmpeg loading failed: ${err.message}`);
       }
     }
